@@ -53,7 +53,7 @@ FROM PortfolioProject..CovidDeaths
 WHERE continent is not null 
 ORDER BY 1,2
 
--- Looking at Total Population vs Vasccinations
+-- Looking at Total Population vs Vaccinations
 
 SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(Cast(vac.new_vaccinations AS int)) OVER (partition by dea.location ORDER BY dea.location, dea.date) AS RollingpPeopleVaccinated, 
 FROM PortfolioProject..CovidDeaths dea

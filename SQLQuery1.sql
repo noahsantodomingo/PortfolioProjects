@@ -1,118 +1,194 @@
-SELECT *
-FROM PortfolioProject..CovidDeaths
-WHERE continent is not null 
-ORDER BY 3,4
+/* 
 
---SELECT *
---FROM PortfolioProject..CovidVaccinations
---ORDER BY 3,4
+Cleaning Data in SQL queries 
 
-SELECT location, date, new_cases, total_deaths, population
-FROM PortfolioProject..CovidDeaths
-WHERE continent is not null 
-ORDER BY 1,2
+*/
 
-
--- Looking at Total Cases vs Total Deaths
--- Shows the likelihood of dying if you contract Covid in your country 
-SELECT location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 AS Death_Percentage
-FROM PortfolioProject..CovidDeaths
-WHERE location like '%states%' AND continent is not null 
-ORDER BY 1,2
-
--- Looking at Total Cases vs Population 
-SELECT location, date, population, total_cases, (total_cases/population)*100 AS Percent_of_population_infected
-FROM PortfolioProject..CovidDeaths
-WHERE location like '%states%' AND continent is not null 
-ORDER BY 1,2
-
--- Looking at countries with highest infection rate compared to population
-SELECT location,  population, MAX(total_cases) AS Highest_Infection_Count, MAX((total_cases/population))*100 AS Percent_of_population_infected
-FROM PortfolioProject..CovidDeaths
-WHERE continent is not null 
-GROUP BY location, population
-ORDER BY 4 DESC	
-
--- Let's break things down by continent 
-SELECT location, MAX(cast(total_deaths AS INT)) AS TotalDeathCount
-FROM PortfolioProject..CovidDeaths
-WHERE continent is null 
-GROUP BY location
-ORDER BY TotalDeathCount DESC
-
--- Global numbers by date
-SELECT date, SUM(new_cases) AS total_cases, SUM(cast(new_deaths AS int)) AS total_deaths, SUM(cast(new_deaths AS int))/SUM(new_cases)*100 AS DeathPercentage
-FROM PortfolioProject..CovidDeaths
-WHERE continent is not null 
-GROUP BY date
-ORDER BY 1,2
-
--- Total global cases and deaths
-SELECT SUM(new_cases) AS total_cases, SUM(cast(new_deaths AS int)) AS total_deaths, SUM(cast(new_deaths AS int))/SUM(new_cases)*100 AS DeathPercentage
-FROM PortfolioProject..CovidDeaths
-WHERE continent is not null 
-ORDER BY 1,2
-
--- Looking at Total Population vs Vaccinations
-
-SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(Cast(vac.new_vaccinations AS int)) OVER (partition by dea.location ORDER BY dea.location, dea.date) AS RollingpPeopleVaccinated, 
-FROM PortfolioProject..CovidDeaths dea
-Join PortfolioProject..CovidVaccinations vac
-  ON dea.location = vac.location
-  and dea.date = vac.date
-WHERE dea.continent is not null 
-ORDER BY 2,3
-
--- USE CTE 
-
-With PopvsVac (Continent, Locaion, Date, Population, New_Vaccinations, RollingPeopleVaccinated)
-as 
-(
-SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(Cast(vac.new_vaccinations AS int)) OVER (partition by dea.location ORDER BY dea.location, dea.date) AS RollingpPeopleVaccinated
-FROM PortfolioProject..CovidDeaths dea
-Join PortfolioProject..CovidVaccinations vac
-  ON dea.location = vac.location
-  and dea.date = vac.date
-WHERE dea.continent is not null 
--- ORDER BY 2,3
-)
-
-SELECT *, (RollingPeopleVaccinated/population) * 100 AS PercentVaccinated
-FROM PopvsVac
-
--- TEMP Table 
-
-DROP Table if exists #PercentPopulationVaccinated
-CREATE TABLE #PercentPopulationVaccinated
-  (
-  Continent nvarchar(255),
-  Location nvarchar(255), 
-  Date datetime,
-  Population numeric, 
-  New_Vaccinations numeric,
-  RollingPeopleVaccinated numeric
-  )
-
-Insert into #PercentPopulationVaccinated
-SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(Cast(vac.new_vaccinations AS int)) OVER (partition by dea.location ORDER BY dea.location, dea.date) AS RollingpPeopleVaccinated
-FROM PortfolioProject..CovidDeaths dea
-Join PortfolioProject..CovidVaccinations vac
-  ON dea.location = vac.location
-  and dea.date = vac.date
-WHERE dea.continent is not null 
-
-SELECT *, (RollingPeopleVaccinated/population) * 100 AS PercentVaccinated
-FROM #PercentPopulationVaccinated
-
-
--- Creating View to store data for later visualtizations
-CREATE View PercentPopulationVaccinated AS 
-SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations, SUM(Cast(vac.new_vaccinations AS int)) OVER (partition by dea.location ORDER BY dea.location, dea.date) AS RollingpPeopleVaccinated
-FROM PortfolioProject..CovidDeaths dea
-Join PortfolioProject..CovidVaccinations vac
-  ON dea.location = vac.location
-  and dea.date = vac.date
-WHERE dea.continent is not null 
 
 SELECT * 
-FROM PercentPopulationVaccinated
+FROM PortfolioProject..NashvilleHousing
+
+-------------------------------------------------------------------------------------------------
+
+
+-- Standardize Date Format 
+
+SELECT SaleDateConverted, CONVERT(DATE, SaleDate)
+FROM PortfolioProject..NashvilleHousing
+
+UPDATE NashvilleHousing
+SET SaleDate = CONVERT(DATE,SaleDate)
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+ADD SaleDateConverted DATE 
+
+UPDATE NashvilleHousing
+SET SaleDateConverted = CONVERT(DATE,SaleDate)
+
+-------------------------------------------------------------------------------------------------
+
+
+-- Populate Property Address data 
+
+SELECT *
+FROM PortfolioProject..NashvilleHousing
+WHERE PropertyAddress is null
+ORDER BY ParcelID
+
+SELECT a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress, ISNULL(a.PropertyAddress, b.PropertyAddress)
+FROM PortfolioProject..NashvilleHousing a
+JOIN PortfolioProject..NashvilleHousing b
+  on a.ParcelID = b.ParcelID
+  AND a.[UniqueID ] <> b.[UniqueID ]
+  WHERE a.PropertyAddress is null 
+
+UPDATE a
+SET PropertyAddress = ISNULL(a.PropertyAddress, b.PropertyAddress)
+FROM PortfolioProject..NashvilleHousing a
+JOIN PortfolioProject..NashvilleHousing b
+  on a.ParcelID = b.ParcelID
+  AND a.[UniqueID ] <> b.[UniqueID ]
+
+-------------------------------------------------------------------------------------------------
+
+
+-- Breaking out Address into individual columns (Address, City, State) 
+
+SELECT 
+SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1) AS Address,
+SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) + 1, LEN(PropertyAddress)) as Address
+FROM PortfolioProject..NashvilleHousing;
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+ADD PropertySplitAddress NVARCHAR(255);
+
+UPDATE NashvilleHousing
+SET PropertySplitAddress = SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1);
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+ADD PropertySplitCity NVARCHAR(255);
+
+UPDATE NashvilleHousing
+SET PropertySplitCity = SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) + 1, LEN(PropertyAddress));
+
+
+
+-- Seperate Owner Address
+
+
+SELECT 
+PARSENAME(REPLACE(OwnerAddress, ',', '.'), 3),
+PARSENAME(REPLACE(OwnerAddress, ',', '.'), 2),
+PARSENAME(REPLACE(OwnerAddress, ',', '.'), 1)
+FROM PortfolioProject..NashvilleHousing
+
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+ADD OwnerSplitAddress NVARCHAR(255);
+
+UPDATE NashvilleHousing
+SET OwnerSplitAddress = PARSENAME(REPLACE(OwnerAddress, ',', '.'), 3);
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+ADD OwnerSplitCity NVARCHAR(255);
+
+UPDATE NashvilleHousing
+SET OwnerSplitCity = PARSENAME(REPLACE(OwnerAddress, ',', '.'), 2);
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+ADD OwnerSplitState NVARCHAR(255);
+
+UPDATE NashvilleHousing
+SET OwnerSplitState = PARSENAME(REPLACE(OwnerAddress, ',', '.'), 1);
+
+
+
+
+-------------------------------------------------------------------------------------------------
+
+
+
+--Change Y and N to Yes and No in "Sold as Vacant" field 
+
+SELECT DISTINCT(SoldAsVacant), COUNT(SoldAsVacant)
+FROM PortfolioProject..NashvilleHousing
+GROUP BY SoldAsVacant
+ORDER BY 2
+
+
+SELECT SoldAsVacant, 
+  CASE WHEN SoldAsVacant = 'y' THEN 'Yes'
+	   WHEN SoldAsVacant = 'n' THEN 'No' 
+	   ELSE SoldAsVacant
+	   END
+FROM PortfolioProject..NashvilleHousing
+
+UPDATE PortfolioProject..NashvilleHousing
+SET SoldAsVacant = CASE WHEN SoldAsVacant = 'y' THEN 'Yes'
+	   WHEN SoldAsVacant = 'n' THEN 'No' 
+	   ELSE SoldAsVacant
+	   END
+
+
+
+
+-------------------------------------------------------------------------------------------------
+
+-- Remove Duplicates
+
+WITH RowNumCTE AS(
+SELECT *, 
+	ROW_NUMBER() OVER (
+	PARTITION BY ParcelID,
+			  PropertyAddress,
+			  SalePrice,
+			  SaleDate,
+			  LegalReference
+			  ORDER BY 
+				UniqueID
+				) AS row_num
+			
+FROM PortfolioProject..NashvilleHousing
+--ORDER BY ParcelID
+)
+
+DELETE
+FROM RowNumCTE
+WHERE row_num > 1 
+
+
+WITH RowNumCTE AS(
+SELECT *, 
+	ROW_NUMBER() OVER (
+	PARTITION BY ParcelID,
+			  PropertyAddress,
+			  SalePrice,
+			  SaleDate,
+			  LegalReference
+			  ORDER BY 
+				UniqueID
+				) AS row_num
+			
+FROM PortfolioProject..NashvilleHousing
+--ORDER BY ParcelID
+)
+
+select * 
+FROM RowNumCTE
+WHERE row_num > 1 
+ORDER BY PropertyAddress
+
+
+
+
+
+-------------------------------------------------------------------------------------------------
+
+-- Delete Unused Columns 
+
+SELECT * 
+FROM PortfolioProject..NashvilleHousing
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+DROP COLUMN OwnerAddress, TaxDistrict, PropertyAddress, SaleDate
+
